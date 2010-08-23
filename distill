@@ -1,0 +1,215 @@
+#!/u01/app/oracle/product/10.1.3.1/OracleAS_1/perl/bin/perl -w
+############################################################
+## CHANGE THE ABOVE LINE ACCORDING TO YOUR Perl LOCATION  ##
+## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
+############################################################
+
+#   JACoW.distill     $Version 1.3 2008.05.07$
+#   Copyright (C) 2008 Sincrotrone Trieste S.C.p.A.
+#   <http://www.elettra.trieste.it> by Ivan Andrian
+#
+#   Manages distilled files by the upload+distill service
+#
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#   You can also get a copy of the license through the web at
+#   <http://www.gnu.org/licenses/gpl.html>
+
+use strict;
+use CGI;
+use File::Spec;
+use File::Copy;
+
+require "iaoptions.config";		# script configuration
+
+require 'dumpvar.pl' if iaoptions::get('debug');
+
+my $q = new CGI;
+
+my %parms = $q->param();
+
+distill($q->param('fname'), $q->param('tfn'));
+
+exit 0;
+
+
+################################################################################
+
+
+sub dont {
+	print htstart()
+		.$q->p('Sorry, don\'t know what to do. Please try again or contact the SPMS administrator.')
+		.htend()
+		;
+}
+
+
+sub distill {
+	my $fn = $_[0];	# filename
+	my $tn = $_[1];	# temporary filename
+	if (!$fn || !$tn) {
+		dont();
+	} else {
+		my $counter=$q->param('co') || 0;
+		my $absurl=$q->url(-absolute=>1);
+
+		if ($counter*iaoptions::get('sleep') >= iaoptions::get('timeout')) {	#timeout
+			toerr();		
+		} elsif  (-e iaoptions::get('out_dir')."$tn.PDF") {	#check for the PDF file
+			save_pdf(iaoptions::get('out_dir')."$tn.PDF", $fn);
+			send_pdf(iaoptions::get('out_dir')."$tn.PDF");
+		} elsif  (-e iaoptions::get('out_dir')."$tn.pdf") {	#check for the pdf file
+			save_pdf(iaoptions::get('out_dir')."$tn.pdf", $fn);
+			send_pdf(iaoptions::get('out_dir')."$tn.pdf");
+		} elsif  ((-e iaoptions::get('out_dir')."$tn.LOG" )		#(or just the
+			& !(-e iaoptions::get('out_dir')."$tn.PDF")) {		#LOG one)
+			send_log(iaoptions::get('out_dir')."$tn.LOG");
+		} elsif  ((-e iaoptions::get('out_dir')."$tn.log" )		#(or just the
+			& !(-e iaoptions::get('out_dir')."$tn.pdf")) {		#log one)
+			send_log(iaoptions::get('out_dir')."$tn.log");
+		} else {
+			my $thisurl = $absurl."?fname=$fn&tfn=$tn&co=".($counter+1);
+			print htstart($thisurl, iaoptions::get('sleep'))
+				.$q->h3('Creating PDF...')
+				.$q->p("A PDF file for '$fn' is being created. ", 
+					$q->strong($counter * iaoptions::get('sleep')), 
+					" seconds had passed since the process started. "
+					)
+				.$q->p("This job will take at maximum " . iaoptions::get('timeout') . " seconds to complete.")
+				.htend()
+			;
+
+		}
+	}
+
+}
+
+
+sub toerr {	# timeout
+	print htstart()
+		.$q->strong($q->font({-color=>'red', -size=>4}, "Timeout ("
+		.iaoptions::get('timeout')
+		." seconds) reached while waiting for a PDF file to be produced."))
+		.$q->p("The server may be very busy, or this file could be too complex.")
+		.$q->p("Please review the production of your .PS file, and if  
+		necessary see information and help for authors at the 
+		<a href='http://www.jacow.org'>JACoW</a> site, or report to the 
+		<em>Proceedings Office</em> at the conference.")
+		.$q->end_html();
+}
+
+# htstart
+# Gives back the HTML header + <html>
+# $_[0] == URL to redirect to if refresh is needed
+# $_[1] == refresh timing
+sub htstart {
+	($_[0]?$q->header(-type=>'text/html',-refresh=>$_[1]."; URL=$_[0]"):$q->header)
+	.$q->start_html(-title=>'JACoW PostScript to PDF utility',
+								-author=>'ivan.andrian@elettra.trieste.it') ;
+}
+
+sub htend {
+	$q->end_html;
+}
+
+
+#############################################################################
+# gives back the PDF to the browser/user
+#############################################################################
+sub send_pdf {	
+	my $fname = $_[0];
+    my $buffer;
+	print $q->header(-type => 'application/pdf');
+    open(INFILE,"<$fname");
+    while (read(INFILE,$buffer,1024)) {  
+            print($buffer);
+    }
+    close INFILE;
+	# Add HERE the copy of the distilled file to the paper directory
+	# (findlastver etc.)
+}
+
+
+
+#############################################################################
+# saves the auto-distilled PDF to the upload area
+#############################################################################
+#	use:		save_pdf(iaoptions::get('out_dir')."$tn.pdf", $fn);
+sub save_pdf {	
+	my $tfname = $_[0];	# temporary filename, with full path
+	my $rfname = $_[1]; # real filename, *without* path
+	my $paper_id = uc((split(/\./, $rfname))[0]);
+	# change the filename to .AUTODISTILL. (I know it's a PDF...)
+	$rfname = $paper_id .iaoptions::get('infix') . '.PDF' ;	
+	my $full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
+	my $full_path_with_file = File::Spec->catfile($full_path, $rfname) ;
+
+	# backup old version if exists
+    if (-f "$full_path_with_file" && -r "$full_path_with_file" ) {
+		my $fname=filelastver($rfname);
+        rename($full_path_with_file, File::Spec->catfile($full_path, $fname)) 
+    }
+	copy($tfname, File::Spec->catfile($full_path, $rfname));
+}
+
+
+
+#############################################################################
+# gives back the error LOG to the browser/user
+#############################################################################
+sub send_log {	
+	my $fname = $_[0];
+    my $buffer;
+	print htstart()
+		.$q->strong($q->font({-color=>'red', -size=>4}, "ERROR while creating the PDF."))
+		.$q->p("Here follow the details of the problem encountered:")
+		.'<pre style="background-color: BurlyWood;">'
+	;
+    open(INFILE,"<$fname");
+    while (read(INFILE,$buffer,1024)) {  
+            print($buffer);
+    }
+    close INFILE;
+	print '</pre>' . htend();
+}
+
+
+#
+# Find out new filename for prev. file (versioning)
+#
+sub filelastver {
+    my $fname_ver=0;
+    my @fname_pieces=split(/\./, $_[0]);
+    # get the extension (if any)
+    my $fname_ext=($#fname_pieces == 0)?''
+         :('.'.pop(@fname_pieces));
+    my $fname_net=join('.',@fname_pieces);
+	my $paper_id = uc($fname_pieces[0]);
+    my $fname;
+	my $full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
+    do {
+        $fname=$fname_net   # filename w/o extension
+            .'.' # version
+            .sprintf("%0".iaoptions::get('counter_length')."u", ++$fname_ver)
+            .$fname_ext     # extension (if any)
+            ;
+        print "File exists, trying ".File::Spec->catfile($full_path, $fname)."<br />" 
+            if iaoptions::get('debug');    # DEBUG
+    } while (-f File::Spec->catfile($full_path, $fname));
+    return $fname;
+}
+
+
+# vim:set ai tw=80 sw=4 ts=4:

@@ -1,0 +1,169 @@
+#!/u01/app/oracle/product/10.1.3.1/OracleAS_1/perl/bin/perl -w
+
+############################################################
+## CHANGE THE ABOVE LINE ACCORDING TO YOUR Perl LOCATION  ##
+## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
+############################################################
+
+#   JACoW metadistill     $Version 1.3 2008.05.27$
+#   Copyright (C) 2008 Sincrotrone Trieste S.C.p.A.
+#   <http://www.elettra.trieste.it> by Ivan Andrian
+#
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#   You can also get a copy of the license through the web at
+#   <http://www.gnu.org/licenses/gpl.html>
+
+use strict;
+use CGI;
+use File::Spec;
+use File::Basename;
+use Encode qw(encode);
+use URI::Escape;
+use LWP::UserAgent;
+
+require "iaoptions.config";		# script configuration
+
+my $q = new CGI;
+
+require 'dumpvar.pl' if iaoptions::get('debug') == 1 || iaoptions::get('log');    # DEBUG || LOG
+
+# override script options possibly passed via HTTP POST/GET
+
+my @pnames = $q->param;
+
+# change of parameter name from version 1.12 to 1.13
+my $filename_param = ((grep {m|file_name|} @pnames)?'file_name':'filename');
+
+print $q->header;
+print $q->start_html('JACoW PostScript to PDF utility',
+		-author=>"Ivan Andrian <ivan.andrian_AT_elettra.trieste.it>"),
+	$q->h1('JACoW PostScript to PDF utility');
+
+if (iaoptions::get('debug') == 1) { 
+	print("<xmp>\nPerl include path: \n");
+	main::dumpValue(\@INC);
+	print("\nOPTIONS: \n");
+	iaoptions::dumt();
+	print("\nPARAMETERS: \n");
+	for (my $i=0;$i<=$#pnames;$i++) {
+		print $pnames[$i] .' == ';
+		main::dumpValue($q->param($pnames[$i])) if iaoptions::get('debug') == 1;
+	}
+	print("</xmp>\n");
+}
+
+
+# return values
+my $err_msg ='';
+
+# parameters
+my $abs_id          =uc($q->param("abs_id"));
+my $paper_id        =uc($q->param("paper_id"));
+my $this_file_type_o=$q->param("this_file_type");
+my $this_file_type  =lc($this_file_type_o);
+my $this_platform   =$q->param("this_platform");
+my $return_URL      =$q->param("return_URL");  
+my $filename        =$q->param($filename_param);
+my $tempfn          =$q->param("tfn");
+my $comments        =$q->param("comments");
+my $pid        		=$q->param("pid");
+
+# Checking for directory existance
+if (!$err_msg && $filename) {
+    my $full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
+	my $full_path_with_file = File::Spec->catfile($full_path, $filename);
+    if (!(-e $full_path  && -f "$full_path_with_file" && -r "$full_path_with_file" ) ) {
+    	$err_msg ="Sorry, I cannot find the PostScript file $filename.";
+    } else {
+	print "<xmp>PostScript file to be read: $full_path + $filename = $full_path_with_file</xmp>" 
+		if iaoptions::get('debug');    # DEBUG
+
+	# now let the SPMS know about the new file
+	my $send = $return_URL."JACoW.upload_file_succeeded"
+		."?abs_id=" .$abs_id
+		."&this_file_type=" .$this_file_type_o
+		."&this_platform=" .$this_platform
+		."&".$filename_param."=" .$filename
+		."&pid=" .$pid
+		."&comments=" .URI::Escape::uri_escape(encode("UTF-8", $comments))
+	;
+	print "<xmp>SPMS calling: $send</xmp>" if iaoptions::get('debug');    # DEBUG
+
+	my $ua = LWP::UserAgent->new;
+	$ua->timeout(90);	# default is 180"
+	$ua->proxy(['http', 'https'], iaoptions::get('proxy')) if iaoptions::get('proxy');
+		   
+	my $response = $ua->get($send);
+			 
+	if (! $response->is_success) {
+		print '<div style="background-color: BurlyWood;">'
+			.$q->strong($q->font({-color=>'red', -size=>4}, "ERROR while talking to the SPMS."))
+			.$q->p('This means that the file, even if uploaded successfully, was NOT recorded into the SPMS.'
+			.'<br />Please report to the SPMS administrator the following error code:'
+			.'<pre>'.$response->status_line.'</pre>'
+			)
+			.'</div>';
+	} 
+# do not use the following code, since the SPMS will redirect to file_info (locally...)
+#	else {
+#		print $response->content if iaoptions::get('debug');  # or whatever
+#	}
+
+	# end of communications with the SPMS
+
+	print $q->p("The file <strong>'$filename'</strong> you have submitted 
+		<strong>has been succesfully uploaded</strong>.")
+		.$q->p("It is now being converted to PDF format for you to check for any  
+		possible conversion problems.")
+		.$q->p("Please wait for this process to be completed by watching the area  
+		below until the PDF is displayed (or an error given).")
+		.$q->p("
+		If you get an error message, please try creating a better PS file  
+		that solves the specific problem.
+		")
+		.$q->p("
+		In case of success please, <strong>IN ANY CASE</strong>, login to your account at the  
+		outset of the conference to check the final result following  
+		processing by the Editorial Team.  You can also check the editing  
+		status which will be shown on the <strong><em>Paper Processing Status Board</strong></em> at  
+		the conference.
+		")
+		;
+	# now give a way to go back to the SPMS
+	print ''
+		.$q->p("When you're done, click <strong>"
+		.$q->a({href => $return_URL."JACoW.file_info?abs_id=".$abs_id}, 'HERE')
+		."</strong> to go back to the SPMS."
+	);
+
+	# and now the part dedicated to the PDF/LOG
+	print "<iframe id='PDFarea' name='PDFarea' src='/cgi-bin/distill?fname=$filename&tfn=$tempfn' width='100%' 
+		height='700px' frameborder='0' scrolling='auto' >"
+		.'</iframe>'
+	;
+
+    }
+}
+# done! Easy, isn't it?
+print $q->end_html;
+
+
+
+__END__
+
+
+
+# vim:set ai tw=80 sw=4 ts=4:

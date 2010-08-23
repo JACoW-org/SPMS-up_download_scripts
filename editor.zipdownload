@@ -1,0 +1,413 @@
+#!/u01/app/oracle/product/10.1.3.1/OracleAS_1/perl/bin/perl -w
+
+############################################################
+## CHANGE THE ABOVE LINE ACCORDING TO YOUR Perl LOCATION  ##
+## This is good for Perl installed by Oracle 9iR2         ##
+## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
+############################################################
+
+#	editor.zipdownload          $Version 1.7 2009.11.03$
+#	Copyright (C) 2004-2009 Sincrotrone Trieste S.C.p.A.
+#	<http://www.elettra.trieste.it> by Ivan Andrian
+#
+#	Manage file uploads for the JACoW SPMS
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#   You can also get a copy of the license through the web at
+#   <http:#www.gnu.org/licenses/gpl.html>
+
+use strict;
+use CGI qw/:standard *table *div/;
+use File::Spec;
+use File::Basename;
+use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
+
+require "iaoptions.config";		# script configuration
+
+# Embedded Cascading StyleSheet
+my $css_emb = <<HERE;
+<!--
+	body {
+		font-family: Arial, sans-serif;
+	}
+	h1 {
+		font-style: italic;
+	}
+	.sephead {
+		border-style: solid;
+		border-width: 0px;
+		border-color: black;
+		background-color: #e8e8e8;
+		margin: 0;
+	}
+	table {
+		border-style: ridge;
+		border-width: 2px;
+		padding: 0px;
+		margin: 10;
+	}
+	tr.odd {
+		background-color: #F5DEB3;	/* Wheat */
+	}
+	tr.even {
+		background-color: #F5F5DC;	/* Beige */
+	}
+	td, th {
+		padding: 2;
+		padding-right: 10;
+		padding-left: 10;
+		margin: 0;
+	}
+	th, th.log {
+		background-color: #A52A2A;	/* Brown */
+		color: White;
+	}
+	th.log {
+		background-color: gray;
+	}
+	.typebox {
+		border-color: black;
+		border-style: dotted;
+		border-width: 1;
+		padding: 0;
+		margin-top: 20;
+		margin-bottom: 30;
+	}
+-->
+HERE
+
+my $css_ext = '';	# put here a URL to an external CSS if wanted
+
+# let's go!
+
+my $q = new CGI;
+
+# override script options possibly passed via HTTP POST/GET
+
+my @pnames = $q->param;
+my %pnames;
+
+for (my $i=0;$i<=$#pnames;$i++) {
+	if ( $pnames[$i] =~ /^script_option_/ && $pnames[$i] ne 'script_option_root_dir' ) {
+		iaoptions::get( lc(substr($pnames[$i], 14)) ) = $q->param($pnames[$i]) ;
+		iaoptions::get( lc(substr($pnames[$i], 14)) ) =~ s/%([a-fA-F0-9]{2})/chr(hex($1))/ge;
+	}
+	$pnames{$pnames[$i]}=$q->param($pnames[$i]);
+}
+
+
+# return values
+my $err_msg ='';
+
+# parameters
+my $paper_id	=uc($q->param("paper_id"));
+my $wanted_file	=$pnames{'wanted_file'}?File::Spec->canonpath( $q->param("wanted_file") ):'';
+my $whatwewant	=$pnames{'downthemall'}?$pnames{'downthemall'}:'';
+my $full_path;
+my @mask=split(/,/,iaoptions::get('mask'));
+my @frcv=split(/,/,iaoptions::get('forceview'));
+
+
+# Checking for directory existance
+if (!$err_msg) {
+	$full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
+	if (! -e $full_path ) {
+		$err_msg ="The contribution directory for $paper_id does not exist.";
+	}
+}
+
+if ($wanted_file) {	# direct download of the file
+
+	$wanted_file .= ($pnames{'getlog'}?iaoptions::get('logext'):'') ;
+
+	print $q->header( -type=>'application/octet-stream'
+					, -expires=>'now'
+					, -Content_Disposition=>"attachment; filename=$wanted_file"
+					);
+	# now read the file
+	my $full_path_with_file = File::Spec->catfile($full_path, $wanted_file);
+	my $buffer;
+	open(INFILE,"<$full_path_with_file");
+	while (read(INFILE,$buffer,1024)) {	
+		print($buffer);
+	}
+	close INFILE;
+	
+} else {
+	# here we are supposed to read the dir and... go!
+
+	# read the file list from the disk
+	opendir(DIR, $full_path) || iadie("Can't open contribution directory for $paper_id: $!");
+	my @dircontent = grep ( !/^\./ && -f "$full_path/$_" , readdir(DIR) );
+	closedir DIR; 
+
+
+	# create THE structure: 
+	# file_type => orig_file_name => version => real_file_name
+	my $dircontent_str;
+	
+	foreach my $file (@dircontent) {
+		next if (masked($file, \@mask) && !masked($file, \@frcv) );	# skip masked files
+		my $fname_pieces = filename_split($file);
+		my $fname_net = ($fname_pieces->[2]?		# w/o version
+			join('.', $fname_pieces->[0], $fname_pieces->[2]):
+			$fname_pieces->[0]);
+		$dircontent_str->{uc($fname_pieces->[2])}->{$fname_net}->{$file} 
+			= ($fname_pieces->[1]?$fname_pieces->[1]:iaoptions::get('lastext'))
+			. " - ". localtime((stat(File::Spec->catfile($full_path, $file)))[9]) ;	# last modification time
+	}
+
+
+	# and now act according to the type of the request
+
+
+	if ($whatwewant eq 'recent') {
+		# give a ZIP file with all the most recent files
+
+		my $zip = Archive::Zip->new();
+
+		# scan THE structure and zip the latest files
+		foreach my $ftype (keys(%$dircontent_str)) {
+			foreach my $file_orig (keys(%{$dircontent_str->{$ftype}})) {
+				my $fpwf = File::Spec->catfile($full_path, $file_orig);
+				my $member = $zip->addFile($fpwf, $file_orig);
+				$member->desiredCompressionMethod( COMPRESSION_STORED );
+			}
+		}
+		my ($zfh, $zname) = Archive::Zip::tempFile(iaoptions::get('tmp_dir'));
+		iadie('write error') unless $zip->writeToFileHandle( $zfh  ) == AZ_OK;
+		close $zfh;
+	
+		# and now let's give the user the file!
+		print $q->header( -type=>'application/octet-stream'
+					, -expires=>'now'
+					, -Content_Disposition=>"attachment; filename=$paper_id.zip"
+					);
+		# now read the file
+		my $buffer;
+		open(INFILE,"<$zname");
+		while (read(INFILE,$buffer,1024)) {	
+			print($buffer);
+		}
+		close INFILE;
+		unlink $zname;
+
+
+	} else {			# give out directory contents
+
+		require 'dumpvar.pl' if iaoptions::get('debug') == 1;	# DEBUG
+
+		print $q->header(-expires=>'now');
+		print $q->start_html( -style=>{-code=>$css_emb, -src=>$css_ext}
+			,-title=>"$paper_id - file download utility"),
+			'<script>window.focus();</script>',
+			$q->h1("Download files for $paper_id");
+
+
+		if (iaoptions::get('debug')) {	#DEBUG
+			if (iaoptions::get('debug') == 1) { 
+				print("<xmp>\nOPTIONS: \n");
+				iaoptions::dump();
+				print("\nPARAMETERS: \n");
+				for (my $i=0;$i<=$#pnames;$i++) {
+					print $pnames[$i] .' == ';
+					main::dumpValue($q->param($pnames[$i])) 
+						if iaoptions::get('debug') == 1;
+				}
+			}
+			print("</xmp>\n");
+		}
+
+
+		if (@dircontent) {
+			# visualise THE structure
+			if (iaoptions::get('debug') == 1) {#DEBUG
+				print("<hr /><xmp>-- dircontent_str --\n");
+				main::dumpValue($dircontent_str);
+				print("</xmp><hr />\n");
+			}
+
+			# Ability to grab all the files in a ZIP bin
+			print "\n", $q->start_form(
+				  -method=>'GET'
+				, -action=>$q->url(-absolute=>1)
+				);
+			print "\n", $q->hidden('downthemall', 'recent');
+			print "\n", $q->hidden('paper_id', $paper_id);
+			print $q->submit(-name=>'getthem', 
+				-value=>"Download a ZIP file with ALL the ".iaoptions::get('lastext')." files.");
+			print "\n", $q->end_form() . "\n";
+
+
+			# scan THE structure and print out the select items
+			foreach my $ftype (keys(%$dircontent_str)) {
+				print $q->start_div({-class=>"typebox"}), "\n";
+				print $q->h2({-class=>'sephead'}, $ftype, ($ftype?' - ':''), ftype_expl($ftype)), "\n";
+				# here goes the table
+				print $q->start_table(), "\n", 
+					$q->Tr($q->th({-class=>(($ftype eq 'JACOW_LOG')?'log':'')}, 
+					['&nbsp;', 'Filename', 'Version', '&nbsp;'])) , "\n";
+				my $line=0;
+				foreach my $file_orig (keys(%{$dircontent_str->{$ftype}})) {
+					print "\n", $q->start_form(
+						  -method=>'GET'
+						, -action=>$q->url(-absolute=>1)
+						);
+					# pass on the parameters of the current HTTP GET
+					foreach my $par ($q->param()) {
+						print $q->hidden($par, $q->param($par)), "\n";
+					}
+					print $q->Tr({-class=>($line?'even':'odd')}, $q->td([
+							$q->submit(-name=>'getit', -value=>'Get this ->'),
+							$q->strong($file_orig),
+							,$q->popup_menu(-name	=>'wanted_file'
+									, 	-values	=>[ sort(keys(%{$dircontent_str->{$ftype}->{$file_orig}})) ]
+									,	-default=>$file_orig
+									,	-labels	=>$dircontent_str->{$ftype}->{$file_orig}
+							),
+							$q->submit(-name=>'getlog', -value=>'log'),
+						]) );
+					print $q->end_form() . "\n";
+					$line=($line?0:1);
+				}
+				print $q->end_table(), "\n";
+				print $q->end_div(), "\n";
+			}
+
+
+
+		} else {
+			print $q->p("No files uploaded for contribution $paper_id.");
+		}
+		
+		print $q->end_html;
+
+	}
+}
+
+#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+
+#
+# Custom version of die function
+#
+sub iadie {
+	print("<p><strong>FATAL ERROR:</strong> $_[0].</p>");
+	$q->end_html;
+	die($_[0]);
+}
+
+#
+#	File UPPER/lower-case if requested
+#
+sub file_uclc {
+	my $fname=shift;
+	my $fname_ext=filename_split($fname)->[2];
+
+	# Uppercase (e.g. MoPl01 => MOPL01)
+	if (iaoptions::get('uppercase') && 
+		((','.iaoptions::get("uppercase").',') =~ /,$fname_ext,/i) ) {
+		$fname =uc($fname);
+	}
+	# Lowercase (e.g. MoPl01 => mopl01)
+	if (iaoptions::get('lowercase') && 
+		((','.iaoptions::get("lowercase").',') =~ /,$fname_ext,/i) ) {
+		$fname =lc($fname);
+	}
+	$fname;
+}
+
+#
+#	split filename into parts (real name, version, extension)
+#
+sub filename_split {
+	my $fname=shift;
+	my $fname_ext='';
+	my $fname_ver='';
+	my @fname_pieces=split(/\./, $fname);
+
+	if (@fname_pieces >= 2) {
+		# last two elements could be version and/or extension 
+		if (is_fname_ver($fname_pieces[$#fname_pieces])) {
+			$fname_ver = pop(@fname_pieces);
+		} else {
+			$fname_ext = pop(@fname_pieces);
+			if (@fname_pieces >=2 and is_fname_ver($fname_pieces[$#fname_pieces] )) { 
+				# now there is one less element in the array
+				$fname_ver = pop(@fname_pieces);
+			}
+		}
+	}
+	my $fname_net = join('.', @fname_pieces);
+	my @ret = ($fname_net, $fname_ver, $fname_ext);
+	\@ret;
+
+
+}
+
+#
+#	check if the parameter is a version
+#
+sub is_fname_ver {
+	my $length = iaoptions::get("counter_length");
+	( $_[0] =~ /^\d{$length}$/ );
+}
+
+#
+#	give more explanation on file type
+#
+sub ftype_expl {
+	my $type = uc(shift);
+	my $ret;
+	$ret = '(no extension)' if !$type;
+	$ret = 'PostScript files' if $type eq 'PS';
+	$ret = 'Portable Document Format files' if $type eq 'PDF';
+	$ret = 'Encapsulated PostScript files' if $type eq 'EPS' or $type eq 'EPSI';
+	$ret = 'Microsoft Word documents' if $type eq 'DOC';
+	$ret = 'Microsoft Word Templates' if $type eq 'DOT';
+	$ret = 'Microsoft Excel Workbooks' if $type eq 'XLS';
+	$ret = 'Microsoft Excel Workbook Templates' if $type eq 'XLT';
+	$ret = 'eXtensible Markup Language files' if $type eq 'XML';
+	$ret = 'LaTeX source files' if $type eq 'LTX' or $type eq 'TEX';
+	$ret = 'BibTeX Style files' if $type eq 'BST';
+	$ret = 'BibTeX Bibliography databases' if $type eq 'BIB';
+	$ret = 'BibTeX auxiliary files' if $type eq 'BBL';
+	$ret = 'HyperText Markup Language files' if $type eq 'HTML' or $type eq 'HTM';
+	$ret = 'Graphical files' 
+		if $type eq 'GIF' 
+		or $type eq 'TIF' 
+		or $type eq 'TIFF' 
+		or $type eq 'JPG' 
+		or $type eq 'JPEG'
+		or $type eq 'BMP'
+	;
+	$ret = 'General upload log files' if $type eq 'JACOW_LOG';
+
+	($ret?$ret:"'$type' files");
+}
+
+#
+#	look if file is in list of files to not show
+#
+sub masked {
+	my $fname = $_[0];	# filename to test
+	my $listr = $_[1];	# reference to the list of file extensions to mask
+	foreach my $item (@$listr) {
+		return 1 if $fname =~ /$item$/;
+	}
+	return 0;
+}
+
+
+# vim:set ai tw=80 sw=4 ts=4 nu:

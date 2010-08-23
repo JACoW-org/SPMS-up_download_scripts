@@ -1,0 +1,484 @@
+#!/u01/app/oracle/product/10.1.3.1/OracleAS_1/perl/bin/perl -w
+
+############################################################
+## CHANGE THE ABOVE LINE ACCORDING TO YOUR Perl LOCATION  ##
+## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
+############################################################
+
+#   JACoW.file_upload     $Version 1.14 2009.11.03$
+#   Copyright (C) 2004-2009 Sincrotrone Trieste S.C.p.A.
+#   <http://www.elettra.trieste.it> by Ivan Andrian
+#
+#   Manage file uploads for the JACoW SPMS
+#
+#   There is embedded documentation now in this file (POD)
+#   To get install instructions read at the end of this file or
+#   use utilities like pod2text, pod2html, etc.:
+#   $ORACLE_HOME/Apache/perl/bin/pod2text JACoW.file_upload
+#
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#   You can also get a copy of the license through the web at
+#   <http://www.gnu.org/licenses/gpl.html>
+
+use strict;
+use CGI;
+use File::Spec;
+use File::Basename;
+use File::Temp;
+use File::Copy;
+use HTTP::BrowserDetect;
+use Encode qw(encode);
+use URI::Escape;
+
+require "iaoptions.config";		# script configuration
+
+my $q = new CGI;
+
+require 'dumpvar.pl' if iaoptions::get('debug') == 1 || iaoptions::get('log');    # DEBUG || LOG
+
+# override script options possibly passed via HTTP POST/GET
+
+my @pnames = $q->param;
+
+# change of parameter name from version 1.12 to 1.13
+my $filename_param = ((grep {m|file_name|} @pnames)?'file_name':'filename');
+
+# start logging
+my $log = "[CALL PARAMETERS] \n";
+$log.=join("\n", map( { "$_ == ".$q->param($_)} @pnames) );
+$log.="\n\n[INITIAL SCRIPT OPTIONS]\n";
+$log.=join("\n", map( { "$_ == ".iaoptions::get($_) } iaoptions::keys() ) );
+
+
+for (my $i=0;$i<=$#pnames;$i++) {
+    if ( $pnames[$i] =~ /^script_option_/ && $pnames[$i] ne 'script_option_root_dir' ) {
+        iaoptions::get( lc(substr($pnames[$i], 14)) ) = $q->param($pnames[$i]) ;
+        iaoptions::get( lc(substr($pnames[$i], 14)) ) =~ s/%([a-fA-F0-9]{2})/chr(hex($1))/ge;
+    }
+}
+
+$log.="\n\n[FINAL SCRIPT OPTIONS]\n";
+$log.=join("\n", map( { "$_ == ".iaoptions::get($_) } iaoptions::keys() ) );
+$log.="\n\n[CLIENT INFO ETC.]\nOS == ".client_plat(1)."\nBrowser == ".client_browser()."\n";
+$log.="Remote host == " . $q->remote_host() . "\n";
+$log.="Referer == " . $q->referer() . "\n";
+$log.="Request method == " . $q->request_method() . "\n";
+$log.="\n[HTTP ENVIRONMENT]\n";
+$log.=join("\n", map({"$_ == ".$q->http($_)} $q->http()) ) if($q->http());
+$log.="\n\n[HTTPS ENVIRONMENT]\n";
+$log.=join("\n", map({"$_ == ".$q->https($_)} $q->https()) ) if($q->https());
+
+if (iaoptions::get('debug')) {#DEBUG
+    print $q->header;
+    print $q->start_html('JACoW file upload (Perl)'),
+        $q->h1('JACoW file upload (Perl) - DEBUG');
+    if (iaoptions::get('debug') == 1) { 
+        print("<xmp>\nPerl include path: \n");
+        main::dumpValue(\@INC);
+        print("\nOPTIONS: \n");
+		iaoptions::dump();
+        print("\nPARAMETERS: \n");
+        for (my $i=0;$i<=$#pnames;$i++) {
+            print $pnames[$i] .' == ';
+            main::dumpValue($q->param($pnames[$i])) if iaoptions::get('debug') == 1;
+        }
+    }
+    print("</xmp>\n");
+}
+
+# return values
+my $upload_file_succeeded =0;
+my $err_msg ='';
+
+# parameters
+my $paper_id        =uc($q->param("paper_id"));
+my $validated       =$q->param("validated");
+my $abs_id          =$q->param("abs_id");
+my $this_file_type_o=$q->param("this_file_type");
+my $this_file_type  =lc($this_file_type_o);
+my $this_platform   =$q->param("this_platform");
+my $return_URL      =$q->param("return_URL");  
+my $location        ="Location: ".$return_URL;  # "Location: ".
+my $uploaded_file   =$q->upload($filename_param);
+my $comments        =$q->param("comments");
+my $role			=$q->param("role");
+my $pid 			=$q->param("pid");
+my $directories;
+my $fstype = fileparse_set_fstype();	# save the server filesystem type
+print "<xmp>Server filesystem type: $fstype.</xmp>" if iaoptions::get('debug');
+fileparse_set_fstype(client_plat());    # sets client platform 
+#print "<xmp>Client filesystem type: ".client_plat().".</xmp>" if iaoptions::get('debug');
+print "<xmp>FILENAME PARTS (NAME,DIR,EXT):\n\t".join( "\n\t",fileparse(File::Spec->canonpath(
+    $q->param($filename_param) )) )."</xmp>" if iaoptions::get('debug');
+
+my $filename        =(fileparse(File::Spec->canonpath( $q->param($filename_param) )))[0];
+# try solve some problems with certain browsers/proxies/antivirus??
+# not passing the uploaded files correctly
+if (uc($this_file_type) eq 'PS' || uc($this_file_type) eq 'PDF') {
+	$filename = $paper_id.'.'.uc($this_file_type);
+}
+my $tfn        		= iaoptions::get('distill')?(File::Temp::tempnam(iaoptions::get('dist_dir'), iaoptions::get('prefix'))):'';
+my $uploaded_file_info = $q->uploadInfo($uploaded_file);
+my $full_path;  # Full path to end file
+my $send;       # final URL
+my $distill = 0;# will be changed to 1 if the PS needs to be distilled
+
+if (iaoptions::get('debug') == 1) { #DEBUG
+    print "<xmp>\nuploaded_file_info " ;
+    main::dumpValue(\$uploaded_file_info);
+    print "</xmp>";
+}
+
+# Uppercase (e.g. MoPl01 => MOPL01)
+if (iaoptions::get('uppercase') && 
+    ((','.lc(iaoptions::get("uppercase")).',') =~ /,$this_file_type,/i) ) {
+    $filename =uc($filename);
+}
+# Lowercase (e.g. MoPl01 => mopl01)
+if (iaoptions::get('lowercase') && 
+    ((','.lc(iaoptions::get("lowercase")).',') =~ /,$this_file_type,/i) ) {
+    $filename =lc($filename);
+}
+# Checking for validated (JavaScript)
+if (uc(substr($validated,0,1)) ne 'Y' ) {
+    $err_msg ="Unable to upload your file. Your browser does not support JavaScript.";
+}
+# Checking for directory existance
+if (!$err_msg) {
+    $full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
+    if (! -e $full_path ) {
+        if (!mkdir( $full_path, 0777 )) {
+            $err_msg ="Unable to create the directory for the contribution files.";
+        }
+    }
+}
+
+if (!$err_msg && $filename ) {
+    # check for file dimension
+    my $full_path_with_file = File::Spec->catfile($full_path, $filename);
+    print "<xmp>Destination file: $full_path + $filename = $full_path_with_file</xmp>" 
+        if iaoptions::get('debug');    # DEBUG
+    my $fst = (stat($uploaded_file))[7];
+    if (iaoptions::get("max_size") 
+            && $fst > iaoptions::get("max_size")) {
+        $err_msg ="The file you are trying to upload is too BIG.";
+    } elsif (iaoptions::get("check_type") &&   # Check type
+        ((','.lc(iaoptions::get("check_type")).',') =~ /,$this_file_type,/i) ) {
+        my $type = lc(findtype());
+        $err_msg ="File type mismatch: ".uc($type)." type when aspecting $this_file_type_o." 
+            if ( $this_file_type !~ /^$type$/i );
+    } 
+
+    $log="[UPLOADED FILE INFO]\n"
+        ."Name == $filename\n"
+        ."Time == ".localtime() ."\n"
+        .join("\n", map( { "$_ == ".$uploaded_file_info->{$_} }
+            keys(%$uploaded_file_info) ) )
+        ."\nFile size == " . $fst
+        ."\n\nComments == $comments"
+        ."\n\n$log";
+
+    if (!$err_msg) {# OK, file size and type seem good. Move the file, now
+        # backup old version if exists
+        if (-f "$full_path_with_file" && -r "$full_path_with_file" ) {
+            my $fname=filelastver($filename);
+            rename($full_path_with_file, File::Spec->catfile($full_path, $fname)) 
+                or $err_msg="Cannot rename previous version of "
+                .$filename;
+            # rename the log file as well
+            rename($full_path_with_file.'.JACoW_log', File::Spec->catfile($full_path, $fname.'.JACoW_log'))
+                if (-f "$full_path_with_file".'.JACoW_log' && -r "$full_path_with_file".'.JACoW_log' ) ; 
+        }
+
+        # log to a file
+        open(OUTLOG,">$full_path_with_file.JACoW_log");
+        print(OUTLOG $log);
+        close(OUTLOG);
+
+        # Copy the uploaded file to final destination
+        my $buffer;
+        my $wcount=0;
+        my $count=0;
+        seek($uploaded_file,0,0);
+        open(OUTFILE,">$full_path_with_file") 
+            || ($err_msg="Cannot open $filename for writing: $!\n");
+        while ($count=read($uploaded_file,$buffer,1024)) {
+            print(OUTFILE $buffer);
+            $wcount+=$count;
+        }
+        close OUTFILE;
+
+
+        # Try to read it to check if it worked
+        my $rcount=0;
+        open(INFILE,"<$full_path_with_file");
+        while ($count=read(INFILE,$buffer,1024)) {  
+            $rcount+=$count;
+        }
+        close INFILE;
+
+        if($wcount!=$rcount) {
+            $err_msg .= "Problems writing the uploaded file ($filename): "
+                ."$rcount out of $wcount bytes written."
+                ."\n<br />"
+                ."[ $! ]";
+        } else {
+            # chmod if requested
+            chmod(iaoptions::get("upload_chmod"), "$full_path_with_file") 
+                if (iaoptions::get("upload_chmod") 
+                and !(-d $full_path_with_file));
+            $upload_file_succeeded =1;
+            print "<p>Written $wcount bytes</p>" if iaoptions::get('debug');   # DEBUG
+
+			# now distill it if requested/possible
+			if (lc($this_file_type) eq 'ps' and 
+					iaoptions::get('distill') and 
+					iaoptions::get('dist_dir') ne '/' and 
+					( !iaoptions::get('distrole') || $role eq iaoptions::get('distrole') )	
+				) {	
+				
+				print "<h3>Distill is requested</h3>"
+					."<xmp>Temporary file name: $tfn</xmp>" if (iaoptions::get('debug')) 	# DEBUG
+				;   
+
+				# copy the PS to the watched folder defined above.
+				copy($full_path_with_file, $tfn);
+				fileparse_set_fstype($fstype);    # sets server platform 
+				$fstype = fileparse_set_fstype();
+				$tfn = fileparse($tfn);
+				print "<xmp>"
+					."$fstype is again the fstype now\n\n"
+					."File copied to $tfn for distilling"
+					."</xmp>" if iaoptions::get('debug');   # DEBUG
+				$distill = 1;
+			}
+
+        }
+    } else{
+        # log to a file
+        open(OUTLOG,">>$full_path_with_file.general.JACoW_log");
+        print(OUTLOG "\n\n----------------------------------------------------------\n\n");
+        print(OUTLOG $log);
+        close(OUTLOG);
+    }
+} elsif (!$err_msg) {
+        $err_msg ="Bad file! ";
+}
+
+if ($upload_file_succeeded) {
+    $send = ($distill?"Location: /cgi-bin/metadistill":$location."JACoW.upload_file_succeeded")
+            ."?abs_id=" .$abs_id
+            ."&this_file_type=" .$this_file_type_o
+            ."&this_platform=" .$this_platform
+			."&".$filename_param."=" .$filename
+            ."&comments=" .URI::Escape::uri_escape(encode("UTF-8", $comments))
+			."&pid=".$pid
+			.($distill?"&return_URL=$return_URL&paper_id=$paper_id":'')
+			.($distill?"&tfn=$tfn":'')
+            ;
+} else {
+    $send = $location
+	    ."JACoW.upload_file_failed"
+            ."?abs_id=" .$abs_id
+            ."&err_msg=" .$err_msg
+            ;
+}
+
+if(iaoptions::get('debug')) {  # DEBUG
+    print "<hr /><xmp>$send</xmp>",
+          "<hr />$err_msg", 
+          $q->end_html;
+} else {
+    print "$send\n\n";
+}
+
+
+#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+
+#
+# Custom version of die function
+#
+sub iadie {
+    print("<p><strong>FATAL ERROR:</strong> $_[0].</p>");
+    die($_[0]);
+}
+#
+# determine the client platform, in order to trim File::Basename
+#
+sub client_plat() {
+    my $browser = HTTP::BrowserDetect->new;
+    if (iaoptions::get('debug') && !$_[0]) {
+        print "<xmp>\nClient platform detected: ".$browser->os_string()."\n";
+        foreach my $plat ( "windows", "mac", "vms", "os2", "unix", "sun", "aix", "dec", "amiga") {
+            print "\tIs $plat? \t".($browser->$plat()?"YES":"no")."\n";
+        }
+        print "\n</xmp>";
+    }
+    return 'MSWin32' if $browser->windows;
+    return 'MacOS' if $browser->mac;
+    return 'os2' if $browser->os2;
+    return 'VMS' if $browser->vms;
+    return 'AmigaOS' if $browser->amiga;
+    $^O;
+}
+#
+# determine the browser & other nuts
+#
+sub client_browser() {
+    my $browser = HTTP::BrowserDetect->new;
+    return $browser->user_agent();
+    $^O;
+}
+
+#
+# try discovering the upload file type
+#
+sub findtype {
+        my $begin;
+        my $i = 0;
+        my $type ="UNKNOWN";    # default
+        read( $uploaded_file, $begin, 20 ) 
+            or $err_msg ="Unable to read uploaded file.";
+        # easy job
+        $type ="PS"  if (!$err_msg && $begin =~ /^%!PS-Adobe/ );
+        $type ="EPS" if (!$err_msg && $begin =~ /^%!PS-Adobe EPSF/ );
+        $type ="PDF" if (!$err_msg && $begin =~ /^%PDF-/ );
+        # harder job (due to PJL possible heading)
+        while ($type eq "UNKNOWN" && $i < 100 && ($_ = <$uploaded_file>) ) {
+            $type ="PS"  if ( $_ =~ /^%!PS-Adobe/ );
+            $i++;
+        }
+        print "<xmp>\nRecognised file type:\t$type\n</xmp>" if iaoptions::get('debug'); #DEBUG
+        return $type;
+}
+#
+# Find out new filename for prev. file (versioning)
+#
+sub filelastver {
+
+        my $fname_ver=0;
+        my @fname_pieces=split(/\./, $_[0]);
+        # get the extension (if any)
+        my $fname_ext=($#fname_pieces == 0)?''
+            :('.'.pop(@fname_pieces));
+        my $fname_net=join('.',@fname_pieces);
+        my $fname;
+        do {
+            $fname=$fname_net   # filename w/o extension
+                .'.' # version
+                .sprintf("%0".iaoptions::get('counter_length')."u", ++$fname_ver)
+                .$fname_ext     # extension (if any)
+                ;
+            print "File exists, trying ".File::Spec->catfile($full_path, $fname)."<br />" 
+                if iaoptions::get('debug');    # DEBUG
+        } while (-f File::Spec->catfile($full_path, $fname));
+        return $fname;
+}
+
+
+=head1 NAME
+
+JACoW.file_upload
+
+Manage files to upload to the JACoW SPMS (E<lt>http://www.JACoW.orgE<gt>)
+ 
+This script is intended for use with the standard Perl installation 
+that comes with Oracle 9iR2 (Perl 5.005_03).
+
+
+=head1 REQUIREMENTS
+
+Perl 5.005_03 or above.
+
+Due to cross-platform path differences, an additional Perl module is needed: 
+HTTP::BrowserDetect (available on CPAN E<lt>http://cpan.orgE<gt>)
+ 
+
+=head1 HTTP::BrowserDetect INSTALL (on Unix)
+
+Get this module from here: 
+E<lt>http://search.cpan.org/CPAN/authors/id/L/LH/LHS/HTTP-BrowserDetect-0.97.tar.gzE<gt>
+and save it somewhere on your server.
+You will need to install it under the 'Oracle Perl path', not under your
+'standard Perl path'.
+If you are using sh, you can give this commands:
+ 
+
+   # tar xvzf HTTP-BrowserDetect-0.97.tar.gz
+   # cd HTTP-BrowserDetect-0.97
+
+   # export PERLLIB=$PERLLIB:$ORACLE_HOME/Apache/perl/lib/5.00503/
+   # export PERLLIB=$PERLLIB:$ORACLE_HOME/Apache/perl/lib/5.00503/i686-linux/
+
+   # $ORACLE_HOME/Apache/perl/bin/perl Makefile.PL
+   # make
+   # make install
+
+Similar process should be followed under Window$.
+
+=head1 INSTALLATION
+
+Copy this script into your $ORACLE_HOME/Apache/Apache/cgi-bin/ directory
+(... or similar for Windows...).
+
+Set the "Author File Upload Script" System Parameter of the SPMS to
+"/cgi-bin/JACoW.file_upload" and set "File Server Paper Upload Root
+Directory" to a directory where you want to store the uploaded files.
+
+That's it!
+
+=head1 TESTBED
+
+This script has been tested with a Linux server and the clients hereafter:
+
+    IE on MacOS 8.6, MacOS 9 and MacOS X
+    Safari on MacOS X
+    NN 4.76 on MacOS 8.6
+    Mozilla/FireFox on Linux
+    IE 6.x on Windows 98
+
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+You can also get a copy of the license through the web at
+E<lt>http://www.gnu.org/licenses/gpl.htmlE<gt>
+
+=head1 AUTHOR
+
+This script is Copyright (C) 2004-2008 Sincrotrone Trieste S.C.p.A.
+E<lt>http://www.elettra.trieste.itE<gt> by Ivan Andrian
+E<lt>ivan.andrian@elettra.trieste.itE<gt>.
+
+=cut
+
+    
+
+
+
+# vim:set ai tw=80 sw=4 ts=4:
