@@ -199,7 +199,7 @@ if ($wanted_file) {	# direct download of the file
 		# now read the file
 		my $buffer;
 		open(INFILE,"<$zname");
-        binmode(INFILE);
+		binmode(INFILE);
 		while (read(INFILE,$buffer,1024)) {	
 			print($buffer);
 		}
