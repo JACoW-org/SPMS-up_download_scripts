@@ -6,8 +6,8 @@
 ## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
 ############################################################
 
-#	editor.zipdownload          $Version 1.9 2010.11.17$
-#	Copyright (C) 2004-2010 Sincrotrone Trieste S.C.p.A.
+#	editor.zipdownload          $Version 1.10 2011.08.09$
+#	Copyright (C) 2004-2011 Sincrotrone Trieste S.C.p.A.
 #	<http://www.elettra.trieste.it> by Ivan Andrian
 #
 #	Manage file uploads for the JACoW SPMS
@@ -140,7 +140,7 @@ if ($wanted_file) {	# direct download of the file
 	my $full_path_with_file = File::Spec->catfile($full_path, $wanted_file);
 	my $buffer;
 	open(INFILE,"<$full_path_with_file");
-    #binmode(INFILE);
+    binmode(INFILE);
 	while (read(INFILE,$buffer,1024)) {	
 		print($buffer);
 	}
