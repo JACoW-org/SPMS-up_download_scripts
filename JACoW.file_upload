@@ -5,8 +5,8 @@
 ## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
 ############################################################
 
-#   JACoW.file_upload     $Version 1.16 2010.11.17$
-#   Copyright (C) 2004-2010 Sincrotrone Trieste S.C.p.A.
+#   JACoW.file_upload     $Version 1.17 2011.08.10$
+#   Copyright (C) 2004-2011 Sincrotrone Trieste S.C.p.A.
 #   <http://www.elettra.trieste.it> by Ivan Andrian
 #
 #   Manage file uploads for the JACoW SPMS
@@ -52,8 +52,6 @@ my $q = new CGI;
 
 require 'dumpvar.pl' if iaoptions::get('debug') == 1 || iaoptions::get('log');    # DEBUG || LOG
 
-# override script options possibly passed via HTTP POST/GET
-
 my @pnames = $q->param;
 my @gnames = $q->url_param;
 
@@ -68,7 +66,8 @@ $log.=join("\n", map( { "$_ == ".iaoptions::get($_) } iaoptions::keys() ) );
 
 my $redefined_options = '';
 for (my $i=0;$i<=$#gnames;$i++) {
-    if ( $gnames[$i] =~ /^script_option_/ && $gnames[$i] ne 'script_option_root_dir' ) {
+    # override script options possibly passed via HTTP POST/GET
+    if ( $gnames[$i] =~ /^script_option_/ && $gnames[$i] ne 'script_option_root_dir' && iaoptions::get('parms_override')) {
         my $newvalue = $q->url_param($gnames[$i]); 
         my $thiskey  = lc(substr($gnames[$i], 14));
         $newvalue =~ s/%([a-fA-F0-9]{2})/chr(hex($1))/ge ;
@@ -229,7 +228,7 @@ if (!$err_msg && $filename ) {
         seek($uploaded_file,0,0);
         open(OUTFILE,">$full_path_with_file") 
             || ($err_msg="Cannot open $filename for writing: $!\n");
-	binmode(OUTFILE);
+        binmode(OUTFILE);
         while ($count=read($uploaded_file,$buffer,1024)) {
             print(OUTFILE $buffer);
             $wcount+=$count;
@@ -240,7 +239,7 @@ if (!$err_msg && $filename ) {
         # Try to read it to check if it worked
         my $rcount=0;
         open(INFILE,"<$full_path_with_file");
-	binmode(INFILE);
+        binmode(INFILE);
         while ($count=read(INFILE,$buffer,1024)) {  
             $rcount+=$count;
         }
@@ -489,7 +488,7 @@ E<lt>http://www.gnu.org/licenses/gpl.htmlE<gt>
 
 =head1 AUTHOR
 
-This script is Copyright (C) 2004-2008 Sincrotrone Trieste S.C.p.A.
+This script is Copyright (C) 2004-2011 Sincrotrone Trieste S.C.p.A.
 E<lt>http://www.elettra.trieste.itE<gt> by Ivan Andrian
 E<lt>ivan.andrian@elettra.trieste.itE<gt>.
 

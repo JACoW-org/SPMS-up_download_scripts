@@ -6,7 +6,7 @@
 ## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
 ############################################################
 
-#	editor.zipdownload          $Version 1.10 2011.08.09$
+#	editor.zipdownload          $Version 1.11 2011.08.10$
 #	Copyright (C) 2004-2011 Sincrotrone Trieste S.C.p.A.
 #	<http://www.elettra.trieste.it> by Ivan Andrian
 #
@@ -94,17 +94,19 @@ my $css_ext = '';	# put here a URL to an external CSS if wanted
 
 my $q = new CGI;
 
-# override script options possibly passed via HTTP POST/GET
-
 my @pnames = $q->param;
 my %pnames;
 
 for (my $i=0;$i<=$#pnames;$i++) {
-	if ( $pnames[$i] =~ /^script_option_/ && $pnames[$i] ne 'script_option_root_dir' ) {
-		iaoptions::get( lc(substr($pnames[$i], 14)) ) = $q->param($pnames[$i]) ;
-		iaoptions::get( lc(substr($pnames[$i], 14)) ) =~ s/%([a-fA-F0-9]{2})/chr(hex($1))/ge;
-	}
-	$pnames{$pnames[$i]}=$q->param($pnames[$i]);
+    # override script options possibly passed via HTTP POST/GET
+	if ( $pnames[$i] =~ /^script_option_/ && $pnames[$i] ne
+        'script_option_root_dir' && iaoptions::get('parms_override')) {
+        my $newvalue = $q->param($pnames[$i]); 
+        my $thiskey  = lc(substr($pnames[$i], 14));
+        $newvalue =~ s/%([a-fA-F0-9]{2})/chr(hex($1))/ge ;
+        iaoptions::set( $thiskey , $newvalue ) ;
+	} 
+    $pnames{$pnames[$i]}=$q->param($pnames[$i]);
 }
 
 
