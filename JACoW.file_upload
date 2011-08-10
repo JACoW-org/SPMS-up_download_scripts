@@ -240,6 +240,7 @@ if (!$err_msg && $filename ) {
         # Try to read it to check if it worked
         my $rcount=0;
         open(INFILE,"<$full_path_with_file");
+	binmode(INFILE);
         while ($count=read(INFILE,$buffer,1024)) {  
             $rcount+=$count;
         }
