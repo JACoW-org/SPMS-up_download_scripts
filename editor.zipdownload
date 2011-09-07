@@ -6,7 +6,7 @@
 ## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
 ############################################################
 
-#	editor.zipdownload          $Version 1.11 2011.08.10$
+#	editor.zipdownload          $Version 1.12 2011.09.07$
 #	Copyright (C) 2004-2011 Sincrotrone Trieste S.C.p.A.
 #	<http://www.elettra.trieste.it> by Ivan Andrian
 #
@@ -121,6 +121,8 @@ my $full_path;
 my @mask=split(/,/,iaoptions::get('mask'));
 my @frcv=split(/,/,iaoptions::get('forceview'));
 
+iaoptions::check_referer($pnames{'referer_pwd_override'});
+
 
 # Checking for directory existance
 if (!$err_msg) {
@@ -211,8 +213,6 @@ if ($wanted_file) {	# direct download of the file
 
 	} else {			# give out directory contents
 
-		require 'dumpvar.pl' if iaoptions::get('debug') == 1;	# DEBUG
-
 		print $q->header(-expires=>'now');
 		print $q->start_html( -style=>{-code=>$css_emb, -src=>$css_ext}
 			,-title=>"$paper_id - file download utility"),
@@ -227,10 +227,11 @@ if ($wanted_file) {	# direct download of the file
 				print("\nPARAMETERS: \n");
 				for (my $i=0;$i<=$#pnames;$i++) {
 					print $pnames[$i] .' == ';
-					main::dumpValue($q->param($pnames[$i])) 
+                    iaoptions::ddebug($q->param($pnames[$i])) 
 						if iaoptions::get('debug') == 1;
 				}
 			}
+            print($ENV{HTTP_REFERER} . "\n");
 			print("</xmp>\n");
 		}
 
@@ -239,7 +240,7 @@ if ($wanted_file) {	# direct download of the file
 			# visualise THE structure
 			if (iaoptions::get('debug') == 1) {#DEBUG
 				print("<hr /><xmp>-- dircontent_str --\n");
-				main::dumpValue($dircontent_str);
+                iaoptions::ddebug($dircontent_str);
 				print("</xmp><hr />\n");
 			}
 
