@@ -1,7 +1,7 @@
-#!/u01/app/oracle/product/10.1.3.1/OracleAS_1/perl/bin/perl -w
+#!/usr/bin/perl
 ############################################################
 ## CHANGE THE ABOVE LINE ACCORDING TO YOUR Perl LOCATION  ##
-## (it should be $ORACLE_HOME/Apache/perl/bin/perl )      ##
+## (it could be $ORACLE_HOME/Apache/perl/bin/perl )       ##
 ############################################################
 
 #   JACoW.distill     $Version 1.3 2008.05.07$
