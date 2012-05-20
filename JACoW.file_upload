@@ -5,7 +5,7 @@
 ## (it could be $ORACLE_HOME/Apache/perl/bin/perl )       ##
 ############################################################
 
-#   JACoW.file_upload     $Version 1.20 2012.04.23$
+#   JACoW.file_upload     $Version 1.21 2012.05.20$
 #   Copyright (C) 2004-2012 Sincrotrone Trieste S.C.p.A.
 #   <http://www.elettra.trieste.it> by Ivan Andrian
 #
@@ -60,7 +60,9 @@ my $filename_param = ((grep {m|file_name|} @pnames)?'file_name':'filename');
 my $log = "[CALL PARAMETERS] \n";
 $log.=join("\n", map( { "$_ == ".$q->param($_)} @pnames) );
 $log.="\n\n[INITIAL SCRIPT OPTIONS]\n";
-$log.=join("\n", map( { "$_ == ".iaoptions::get($_) } iaoptions::keys() ) );
+$log.=join("\n", map( { "$_ == ".iaoptions::get($_) } 
+		grep({not iaoptions::getdonotlog($_)} iaoptions::keys() ) ));
+
 
 my $redefined_options = '';
 for (my $i=0;$i<=$#gnames;$i++) {
@@ -76,7 +78,8 @@ for (my $i=0;$i<=$#gnames;$i++) {
 }
 
 $log.="\n\n[FINAL SCRIPT OPTIONS]\n";
-$log.=join("\n", map( { "$_ == ".iaoptions::get($_) } iaoptions::keys() ) );
+$log.=join("\n", map( { "$_ == ".iaoptions::get($_) } 
+		grep({not iaoptions::getdonotlog($_)} iaoptions::keys() ) ));
 $log.="\n\n[CLIENT INFO ETC.]\nOS == ". client_plat(1) ."\nBrowser == ".  client_browser() ."\n";
 $log.="Remote host == " . $q->remote_host() . "\n";
 $log.="Referer == " . $q->referer() . "\n";
@@ -223,7 +226,7 @@ if (!$err_msg && $filename ) {
         ."\n\n$log";
 
     if (!$err_msg) {# OK, file size and type seem good. Move the file, now
-        # backup old version if exists
+					# backup old version if exists
         if (-f "$full_path_with_file" && -r "$full_path_with_file" ) {
             my $fname=filelastver($filename);
             rename($full_path_with_file, File::Spec->catfile($full_path, $fname)) 

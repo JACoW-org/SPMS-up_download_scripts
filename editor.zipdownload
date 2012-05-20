@@ -6,7 +6,7 @@
 ## it should be $ORACLE_HOME/Apache/perl/bin/perl         ##
 ############################################################
 
-#	editor.zipdownload          $Version 1.13 2012.03.06$
+#	editor.zipdownload          $Version 1.14 2012.05.11$
 #	Copyright (C) 2004-2012 Sincrotrone Trieste S.C.p.A.
 #	<http://www.elettra.trieste.it> by Ivan Andrian
 #
@@ -259,6 +259,7 @@ if ($wanted_file) {	# direct download of the file
 				);
 			print "\n", $q->hidden('downthemall', 'recent');
 			print "\n", $q->hidden('paper_id', $paper_id);
+			print "\n", $q->hidden('hcheck', $hcheck);
 			print $q->submit(-name=>'getthem', 
 				-value=>"Download a ZIP file with ALL the ".iaoptions::get('lastext')." files.");
 			print "\n", $q->end_form() . "\n";
