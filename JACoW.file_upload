@@ -280,7 +280,7 @@ if (!$err_msg && $filename ) {
             print "<p>Written $wcount bytes</p>" if iaoptions::get('debug');   # DEBUG
 
 			# now distill it if requested/possible
-			if (lc($this_file_type) eq 'ps' and 
+			if ((lc($this_file_type) eq 'ps' or lc($this_file_type) eq 'pdf') and 
 					iaoptions::get('distill') and 
 					iaoptions::get('dist_dir') ne '/' and 
 					( !iaoptions::get('distrole') || $role eq iaoptions::get('distrole') )	

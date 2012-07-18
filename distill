@@ -151,8 +151,12 @@ sub save_pdf {
 	my $tfname = $_[0];	# temporary filename, with full path
 	my $rfname = $_[1]; # real filename, *without* path
 	my $paper_id = uc((split(/\./, $rfname))[0]);
+    my $suffix_tmp = iaoptions::get('suffix4authpdf');
+	$paper_id =~ s/$suffix_tmp//g;	# We remove the author
+									# suffix from the 
+									# paper code
 	my $this_file_type = uc((split(/\./, $rfname))[1]);
-	# change the filename to .AUTODISTILL. (I know it's a PDF...)
+	# change the filename to PCODE.TYPE.AUTODISTILL.PDF (I know it's a PDF...)
 	$rfname = $paper_id.'.'.$this_file_type.iaoptions::get('infix') . '.PDF' ;	
 	my $full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
 	my $full_path_with_file = File::Spec->catfile($full_path, $rfname) ;

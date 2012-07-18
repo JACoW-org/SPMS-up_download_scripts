@@ -160,7 +160,8 @@ if (!$err_msg && $filename) {
 # done! Easy, isn't it?
 print $q->end_html;
 
-# If we destill active we call the Ghostscript executable
+# We already have sent the html page, so the user can already see the page.
+# Now we check if we distill active. In this case we have to call the Ghostscript executable.
 if (!$err_msg && $filename && 
 					(lc($this_file_type) eq 'ps' or lc($this_file_type) eq 'pdf') and 
 					iaoptions::get('distill') and 
