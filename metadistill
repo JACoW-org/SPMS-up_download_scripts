@@ -150,7 +150,7 @@ if (!$err_msg && $filename) {
 	);
 
 	# and now the part dedicated to the PDF/LOG
-	print "<iframe id='PDFarea' name='PDFarea' src='".$script_url."distill".$script_suffix."?fname=$filename&tfn=$tempfn' width='100%' 
+	print "<iframe id='PDFarea' name='PDFarea' src='".iaoptions::get('script_url')."distill".iaoptions::get('script_suffix')."?fname=$filename&tfn=$tempfn' width='100%' 
 		height='700px' frameborder='0' scrolling='auto' >"
 		.'</iframe>'
 	;
@@ -168,7 +168,12 @@ if (!$err_msg && $filename &&
 					iaoptions::get('gs_active') and
 					iaoptions::get('gs_exe') ne '' 
 				) {
-	iaoptions::gsexec(lc($this_file_type), $tempfn);
+		print "<xmp>We distill $tempfn</xmp>" 
+			if iaoptions::get('debug');    # DEBUG
+		iaoptions::execgs(lc($this_file_type), $tempfn);
+} else {
+	print "<xmp>We do not distill $tempfn</xmp>" 
+		if iaoptions::get('debug');    # DEBUG
 }
 
 __END__

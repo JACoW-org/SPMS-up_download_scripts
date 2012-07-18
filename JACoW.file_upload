@@ -315,7 +315,7 @@ if (!$err_msg && $filename ) {
 }
 
 if ($upload_file_succeeded) {
-    $send = ($distill?"Location: ".$script_url."/metadistill".$script_suffix:$location."JACoW.upload_file_succeeded")
+    $send = ($distill?"Location: ".iaoptions::get('script_url')."metadistill".iaoptions::get('script_suffix'):$location."JACoW.upload_file_succeeded")
             ."?abs_id=" .$abs_id
             ."&this_file_type=" .$this_file_type_o
             ."&this_platform=" .$this_platform

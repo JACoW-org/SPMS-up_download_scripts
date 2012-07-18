@@ -116,7 +116,7 @@ sub toerr {	# timeout
 # $_[1] == refresh timing
 sub htstart {
 	($_[0]?$q->header(-type=>'text/html',-refresh=>$_[1]."; URL=$_[0]"):$q->header)
-	.$q->start_html(-title=>'JACoW PostScript to PDF utility',
+	.$q->start_html(-title=>'PostScript and PDF to JACoW compliant PDF utility',
 								-author=>'ivan.andrian@elettra.trieste.it') ;
 }
 
@@ -155,7 +155,7 @@ sub save_pdf {
 	# We uppercase the file name and replace all '.' with '-' conserving the
 	# original file extension
 	my $paper_id = uc($rfname);
-	$paper_id ~= s/\./\-/g;	
+	$paper_id =~ s/\./\-/g;	
 	# change the filename to .AUTODISTILL. (I know it's a PDF...)
 	$rfname = $paper_id.iaoptions::get('infix') . '.PDF' ;	
 	my $full_path =File::Spec->catdir(iaoptions::get('root_dir'), $paper_id);
