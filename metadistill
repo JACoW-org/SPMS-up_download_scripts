@@ -48,15 +48,15 @@ my @pnames = $q->param;
 my $filename_param = ((grep {m|file_name|} @pnames)?'file_name':'filename');
 
 print $q->header;
-print $q->start_html('JACoW PostScript to PDF utility',
+print $q->start_html('PostScript and PDF to JACoW compliant PDF utility',
 		-author=>"Ivan Andrian <ivan.andrian_AT_elettra.trieste.it>"),
-	$q->h1('JACoW PostScript to PDF utility');
+	$q->h1('PostScript and PDF to JACoW compliant PDF utility');
 
 if (iaoptions::get('debug') == 1) { 
 	print("<xmp>\nPerl include path: \n");
 	main::dumpValue(\@INC);
 	print("\nOPTIONS: \n");
-	iaoptions::dumt();
+	iaoptions::dump();
 	print("\nPARAMETERS: \n");
 	for (my $i=0;$i<=$#pnames;$i++) {
 		print $pnames[$i] .' == ';
@@ -150,7 +150,7 @@ if (!$err_msg && $filename) {
 	);
 
 	# and now the part dedicated to the PDF/LOG
-	print "<iframe id='PDFarea' name='PDFarea' src='/cgi-bin/distill?fname=$filename&tfn=$tempfn' width='100%' 
+	print "<iframe id='PDFarea' name='PDFarea' src='".iaoptions::get('script_url')."distill".iaoptions::get('script_suffix')."?fname=$filename&tfn=$tempfn' width='100%' 
 		height='700px' frameborder='0' scrolling='auto' >"
 		.'</iframe>'
 	;
@@ -160,7 +160,22 @@ if (!$err_msg && $filename) {
 # done! Easy, isn't it?
 print $q->end_html;
 
-
+# We already have sent the html page, so the user can already see the page.
+# Now we check if we distill active. In this case we have to call the Ghostscript executable.
+if (!$err_msg && $filename && 
+					(lc($this_file_type) eq 'ps' or lc($this_file_type) eq 'pdf') and 
+					iaoptions::get('distill') and 
+					iaoptions::get('dist_dir') ne '/' and
+					iaoptions::get('gs_active') and
+					iaoptions::get('gs_exe') ne '' 
+				) {
+		print "<xmp>We distill $tempfn</xmp>" 
+			if iaoptions::get('debug');    # DEBUG
+		iaoptions::execgs(lc($this_file_type), $tempfn);
+} else {
+	print "<xmp>We do not distill $tempfn</xmp>" 
+		if iaoptions::get('debug');    # DEBUG
+}
 
 __END__
 

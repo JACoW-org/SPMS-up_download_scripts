@@ -280,7 +280,7 @@ if (!$err_msg && $filename ) {
             print "<p>Written $wcount bytes</p>" if iaoptions::get('debug');   # DEBUG
 
 			# now distill it if requested/possible
-			if (lc($this_file_type) eq 'ps' and 
+			if ((lc($this_file_type) eq 'ps' or lc($this_file_type) eq 'pdf') and 
 					iaoptions::get('distill') and 
 					iaoptions::get('dist_dir') ne '/' and 
 					( !iaoptions::get('distrole') || $role eq iaoptions::get('distrole') )	
@@ -315,7 +315,7 @@ if (!$err_msg && $filename ) {
 }
 
 if ($upload_file_succeeded) {
-    $send = ($distill?"Location: /cgi-bin/metadistill":$location."JACoW.upload_file_succeeded")
+    $send = ($distill?"Location: ".iaoptions::get('script_url')."metadistill".iaoptions::get('script_suffix'):$location."JACoW.upload_file_succeeded")
             ."?abs_id=" .$abs_id
             ."&this_file_type=" .$this_file_type_o
             ."&this_platform=" .$this_platform
