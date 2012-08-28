@@ -5,7 +5,7 @@
 ## (it could be $ORACLE_HOME/Apache/perl/bin/perl )       ##
 ############################################################
 
-#   JACoW metadistill     $Version 1.4 2012.08.22$
+#   JACoW metadistill     $Version 1.4 2012.08.28$
 #   Copyright (C) 2008-12 Sincrotrone Trieste S.C.p.A.
 #   <http://www.elettra.trieste.it> by Ivan Andrian
 #
@@ -150,8 +150,9 @@ if (!$err_msg && $filename) {
 	);
 
 	# and now the part dedicated to the PDF/LOG
-	print "<iframe id='PDFarea' name='PDFarea' src='".iaoptions::get('script_url')."distill".iaoptions::get('script_suffix')."?fname=$filename&tfn=$tempfn' width='100%' 
-		height='700px' frameborder='0' scrolling='auto' >"
+	print "<iframe id='PDFarea' name='PDFarea' src='"
+		.iaoptions::get('distill_script')
+		."?fname=$filename&tfn=$tempfn' width='100%' height='700px' frameborder='0' scrolling='auto' >"
 		.'</iframe>'
 	;
 

@@ -138,10 +138,6 @@ my $hcheck			=uc($q->param("hcheck"));
 my $directories;
 my $fstype = fileparse_set_fstype();	# save the server filesystem type
 
-
-# Security test: check if the REFERER is correct
-iaoptions::check_referer();
-
 # Security test: check against the hash
 iadie("Not allowed.") if ($hcheck ne $chash);
 
@@ -315,7 +311,7 @@ if (!$err_msg && $filename ) {
 }
 
 if ($upload_file_succeeded) {
-    $send = ($distill?"Location: ".iaoptions::get('script_url')."metadistill".iaoptions::get('script_suffix'):$location."JACoW.upload_file_succeeded")
+    $send = ($distill?"Location: ".iaoptions::get('metadistill_script'):$location."JACoW.upload_file_succeeded")
             ."?abs_id=" .$abs_id
             ."&this_file_type=" .$this_file_type_o
             ."&this_platform=" .$this_platform
