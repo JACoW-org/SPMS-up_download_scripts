@@ -139,6 +139,8 @@ sub send_pdf {
     close INFILE;
 	# Add HERE the copy of the distilled file to the paper directory
 	# (findlastver etc.)
+	# delete the temporary file to save some space
+	unlink($fname);
 }
 
 
@@ -167,8 +169,6 @@ sub save_pdf {
         rename($full_path_with_file, File::Spec->catfile($full_path, $fname)) 
     }
 	copy($tfname, File::Spec->catfile($full_path, $rfname));
-	# delete the temporary file to save some space
-	unlink($tfname);
 }
 
 
@@ -190,6 +190,8 @@ sub send_log {
     }
     close INFILE;
 	print '</pre>' . htend();
+	# delete the temporary file to save some space
+	unlink($fname);
 }
 
 
