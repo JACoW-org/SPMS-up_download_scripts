@@ -167,6 +167,8 @@ sub save_pdf {
         rename($full_path_with_file, File::Spec->catfile($full_path, $fname)) 
     }
 	copy($tfname, File::Spec->catfile($full_path, $rfname));
+	# delete the temporary file to save some space
+	unlink($tfname);
 }
 
 

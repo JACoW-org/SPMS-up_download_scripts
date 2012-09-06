@@ -173,6 +173,9 @@ if (!$err_msg && $filename &&
 		print "<xmp>We distill $tempfn</xmp>" 
 			if iaoptions::get('debug');    # DEBUG
 		iaoptions::execgs(lc($this_file_type), $tempfn);
+		# We clean up the source file in the temp directory to prevent it from growing
+		# too much in size.
+		unlink($tempfn);
 } else {
 	print "<xmp>We do not distill $tempfn</xmp>" 
 		if iaoptions::get('debug');    # DEBUG
