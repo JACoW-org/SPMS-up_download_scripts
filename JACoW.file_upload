@@ -151,6 +151,8 @@ print "<xmp>FILENAME PARTS (NAME,DIR,EXT):\n\t".join( "\n\t",fileparse(File::Spe
 my $filename        =(fileparse(File::Spec->canonpath( $q->param($filename_param) )))[0];
 # try solve some problems with certain browsers/proxies/antivirus??
 # not passing the uploaded files correctly
+# FIXME: This is not working correct if PDFS is passed, the file can be PS or PDF in this case
+#        and guessing the type is not possible (RM 21.03.2014)
 if (uc($this_file_type) eq 'PS' || uc($this_file_type) eq 'PDF') {
 	$filename = $paper_id
 		. (     (uc($this_file_type) eq 'PDF') 
@@ -276,7 +278,7 @@ if (!$err_msg && $filename ) {
             print "<p>Written $wcount bytes</p>" if iaoptions::get('debug');   # DEBUG
 
 			# now distill it if requested/possible
-			if ((lc($this_file_type) eq 'ps' or lc($this_file_type) eq 'pdf') and 
+			if ( ((','.lc(iaoptions::get("distill_types")).',') =~ /,$this_file_type,/i) and 
 					iaoptions::get('distill') and 
 					iaoptions::get('dist_dir') ne '/' and 
 					( !iaoptions::get('distrole') || $role eq iaoptions::get('distrole') )	
