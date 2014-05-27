@@ -5,9 +5,9 @@
 ## (it could be $ORACLE_HOME/Apache/perl/bin/perl )       ##
 ############################################################
 
-#   JACoW.file_upload     $Version 1.21 2012.05.20$
-#   Copyright (C) 2004-2012 Sincrotrone Trieste S.C.p.A.
-#   <http://www.elettra.trieste.it> by Ivan Andrian
+#   JACoW.file_upload     $Version 1.22 2014.05.27$
+#   Copyright (C) 2004-2014 Elettra - Sincrotrone Trieste S.C.p.A.
+#   <http://www.elettra.eu> by Ivan Andrian
 #
 #   Manage file uploads for the JACoW SPMS
 #
@@ -315,18 +315,20 @@ if (!$err_msg && $filename ) {
 if ($upload_file_succeeded) {
     $send = ($distill?"Location: ".iaoptions::get('metadistill_script'):$location."JACoW.upload_file_succeeded")
             ."?abs_id=" .$abs_id
+			."&paper_id=$paper_id"
             ."&this_file_type=" .$this_file_type_o
             ."&this_platform=" .$this_platform
 			."&".$filename_param."=" .$filename
             ."&comments=" .URI::Escape::uri_escape(encode("UTF-8", $comments))
 			."&pid=".$pid
-			.($distill?"&return_URL=$return_URL&paper_id=$paper_id":'')
+			.($distill?"&return_URL=$return_URL":'')
 			.($distill?"&tfn=$tfn":'')
             ;
 } else {
     $send = $location
 	    ."JACoW.upload_file_failed"
             ."?abs_id=" .$abs_id
+			."&paper_id=$paper_id"
             ."&err_msg=" .$err_msg
             ;
 }
@@ -507,9 +509,9 @@ E<lt>http://www.gnu.org/licenses/gpl.htmlE<gt>
 
 =head1 AUTHOR
 
-This script is Copyright (C) 2004-2011 Sincrotrone Trieste S.C.p.A.
-E<lt>http://www.elettra.trieste.itE<gt> by Ivan Andrian
-E<lt>ivan.andrian@elettra.trieste.itE<gt>.
+This script is Copyright (C) 2004-2014 Elettra - Sincrotrone Trieste S.C.p.A.
+E<lt>http://www.elettra.euE<gt> by Ivan Andrian
+E<lt>ivan.andrian@elettra.euE<gt>.
 
 =cut
 

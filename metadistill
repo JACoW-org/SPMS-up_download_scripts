@@ -5,9 +5,9 @@
 ## (it could be $ORACLE_HOME/Apache/perl/bin/perl )       ##
 ############################################################
 
-#   JACoW metadistill     $Version 1.4 2012.08.28$
-#   Copyright (C) 2008-12 Sincrotrone Trieste S.C.p.A.
-#   <http://www.elettra.trieste.it> by Ivan Andrian
+#   JACoW metadistill     $Version 1.5 2014.05.27$
+#   Copyright (C) 2008-14 Elettra - Sincrotrone Trieste S.C.p.A.
+#   <http://www.elettra.eu> by Ivan Andrian
 #
 #
 #   This program is free software; you can redistribute it and/or modify
@@ -49,7 +49,7 @@ my $filename_param = ((grep {m|file_name|} @pnames)?'file_name':'filename');
 
 print $q->header;
 print $q->start_html('PostScript and PDF to JACoW compliant PDF utility',
-		-author=>"Ivan Andrian <ivan.andrian_AT_elettra.trieste.it>"),
+		-author=>"Ivan Andrian <ivan.andrian_AT_elettra.eu>"),
 	$q->h1('PostScript and PDF to JACoW compliant PDF utility');
 
 if (iaoptions::get('debug') == 1) { 
@@ -94,6 +94,7 @@ if (!$err_msg && $filename) {
 	# now let the SPMS know about the new file
 	my $send = $return_URL."JACoW.upload_file_succeeded"
 		."?abs_id=" .$abs_id
+		."&paper_id=$paper_id"
 		."&this_file_type=" .$this_file_type_o
 		."&this_platform=" .$this_platform
 		."&".$filename_param."=" .$filename
@@ -145,7 +146,7 @@ if (!$err_msg && $filename) {
 	# now give a way to go back to the SPMS
 	print ''
 		.$q->p("When you're done, click <strong>"
-		.$q->a({href => $return_URL."JACoW.file_info?abs_id=".$abs_id}, 'HERE')
+		.$q->a({href => $return_URL."JACoW.file_info?abs_id=".$abs_id."&paper_id=$paper_id"}, 'HERE')
 		."</strong> to go back to the SPMS."
 	);
 

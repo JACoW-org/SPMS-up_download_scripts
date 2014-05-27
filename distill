@@ -5,8 +5,8 @@
 ############################################################
 
 #   JACoW.distill     $Version 1.4 2012.08.22$
-#   Copyright (C) 2008-12 Sincrotrone Trieste S.C.p.A.
-#   <http://www.elettra.trieste.it> by Ivan Andrian
+#   Copyright (C) 2008-14 Elettra - Sincrotrone Trieste S.C.p.A.
+#   <http://www.elettra.eu> by Ivan Andrian
 #
 #   Manages distilled files by the upload+distill service
 #
@@ -117,7 +117,7 @@ sub toerr {	# timeout
 sub htstart {
 	($_[0]?$q->header(-type=>'text/html',-refresh=>$_[1]."; URL=$_[0]"):$q->header)
 	.$q->start_html(-title=>'PostScript and PDF to JACoW compliant PDF utility',
-								-author=>'ivan.andrian@elettra.trieste.it') ;
+								-author=>'ivan.andrian@elettra.eu') ;
 }
 
 sub htend {
