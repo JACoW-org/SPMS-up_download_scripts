@@ -5,7 +5,7 @@
 ## (it could be $ORACLE_HOME/Apache/perl/bin/perl )       ##
 ############################################################
 
-#   JACoW.file_upload     $Version 1.22 2014.05.27$
+#   JACoW.file_upload     $Version 1.22.1 2014.05.13$
 #   Copyright (C) 2004-2014 Elettra - Sincrotrone Trieste S.C.p.A.
 #   <http://www.elettra.eu> by Ivan Andrian
 #
@@ -211,7 +211,7 @@ if (!$err_msg && $filename ) {
             && $fst > iaoptions::get("max_size")) {
         $err_msg ="The file you are trying to upload is too BIG.";
     } elsif (iaoptions::get("check_type") &&   # Check type
-        ((','.lc(iaoptions::get("check_type")).',') =~ /,$this_file_type,/i) ) {
+        ((','.lc(iaoptions::get("check_type")).',') =~ /,$this_file_type_o,/i) ) {
         my $type = lc(findtype());
         $err_msg ="File type mismatch: ".uc($type)." type when expecting $this_file_type_o." 
             if ( $this_file_type !~ /^$type$/i );
