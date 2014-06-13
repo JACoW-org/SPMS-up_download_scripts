@@ -213,7 +213,7 @@ if (!$err_msg && $filename ) {
     } elsif (iaoptions::get("check_type") &&   # Check type
         ((','.lc(iaoptions::get("check_type")).',') =~ /,$this_file_type,/i) ) {
         my $type = lc(findtype());
-        $err_msg ="File type mismatch: ".uc($type)." type when aspecting $this_file_type_o." 
+        $err_msg ="File type mismatch: ".uc($type)." type when expecting $this_file_type_o." 
             if ( $this_file_type !~ /^$type$/i );
     } 
 
