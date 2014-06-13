@@ -149,13 +149,17 @@ print "<xmp>FILENAME PARTS (NAME,DIR,EXT):\n\t".join( "\n\t",fileparse(File::Spe
     $q->param($filename_param) )) )."</xmp>" if iaoptions::get('debug');
 
 my $filename        =(fileparse(File::Spec->canonpath( $q->param($filename_param) )))[0];
-# try solve some problems with certain browsers/proxies/antivirus??
-# not passing the uploaded files correctly
-# FIXME: This is not working correct if PDFS is passed, the file can be PS or PDF in this case
-#        and guessing the type is not possible (RM 21.03.2014)
 
-# hack for IPAC14 to accept PDFS as PDF. May not work for PS uploaded as PDFS
-$this_file_type = 'PDF' if (uc($this_file_type) eq 'PDFS') ;
+# the introduction of the fake 'PDFS' file type has brought to many problems
+# in general, do NOT use combined file types
+# hack (@IPAC14) to accept PDFS as PDF. 
+if (uc($this_file_type) eq 'PDFS') {
+	# first set it to PDF
+	$this_file_type = 'PDF' if (uc($this_file_type) eq 'PDFS') ;
+	# then try guessing if it could be a PS
+    $this_file_type = 'PS' if (uc(findtype()) eq 'PS');
+}
+
 if (uc($this_file_type) eq 'PS' || uc($this_file_type) eq 'PDF') {
 	$filename = $paper_id
 		. (     (uc($this_file_type) eq 'PDF') 
