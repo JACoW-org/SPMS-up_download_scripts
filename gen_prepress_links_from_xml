@@ -7,7 +7,7 @@
 # Structure
 # |
 # |- prepress \
-# |            - links_xml.pl
+# |            - jacow-spms-up-download-scripts (this script)
 # |
 # \- papers \
 #            - PAPERCODE \
