@@ -1,0 +1,144 @@
+#!/usr/bin/perl
+
+#
+# This script does a lot of assumptions! It is only prepared for the JACoW fileserver at PSI and would
+# need substantial cleanup and documentation before using it elsewhere.
+#
+# Structure
+# |
+# |- prepress \
+# |            - jacow-spms-up-download-scripts (this script)
+# |
+# \- papers \
+#            - PAPERCODE \
+#                         - PAPERCODE.PDF
+#  
+# - Papers must reside in ../papers relative to the script
+# - Links will be created in the directory where the script is called
+# - Suffix of the PDFs has to be uppercase ('.PDF')
+# - The filesystem must be AFS
+# - You have to change the '$spms_base' variable to point to your conference instance
+#
+# The script uses either the linux 'ln' command to link (on linux or cygwin) or it uses 
+# the AFS command 'symlink' (on windows). So make sure these are accessible.
+#
+#
+
+use warnings;
+use strict;
+
+use LWP::Simple;
+use IO::Socket::SSL;
+use XML::XPath;
+use XML::XPath::XMLParser;
+use Config;
+
+# Configure this (with trailing slash):
+die 'Please set the $spms_base variable and remove the "die" command in front of it';  my $spms_base = ''; # For example: 'https://oraweb.cern.ch/pls/YOUR_CONFERENCE_HERE/'; 
+
+# try to detect platform
+my $platform = 'unknown';
+$platform = 'win' if $Config{osname} =~ /win/i;
+$platform = 'linux' if $Config{osname} =~ /linux/i;
+$platform = 'cygwin' if $Config{osname} =~ /cygwin/i;
+$platform = 'mac' if $Config{osname} =~ /darwin/i;
+
+print STDERR "Detected platform is '" . $platform . "'";
+
+# Only linux and windows are supported
+die "Unsupported platform '" . $platform . "' detected from osname='" . $Config{osname} . "'" if $Config{osname} !~ /linux|win|cygwin/;
+
+sub  trim { my $s = shift; $s =~ s/^\s+|\s+$//g; return $s };
+
+# This will be added to the spms_base to fecht session summary and session details later
+my $spms_summary = $spms_base . 'spms_summary.xml';
+my $spms_session = $spms_base . 'xml2.session?sid=';
+
+print STDERR "Retrieving SPMS Summary\n";
+my $summary_content = get $spms_summary or die "Unable to get '$spms_summary', reason: $!\n";
+print STDERR "Done retrieving SPMS Summary\n";
+
+my $xpsc = XML::XPath->new( xml => $summary_content );
+
+# toString howto:	XML::XPath::XMLParser::as_string($node)
+
+# Find all session names and loop through them
+my $session_nodeset = $xpsc->find('/conference/session/name/@abbr'); 
+foreach my $session_node ($session_nodeset->get_nodelist) {
+	# For each session we search for the program codes and group for each primary code its secondary codes
+	my $session_code = trim($session_node->getNodeValue());
+	print STDERR "Processing session $session_code\n";
+	my $session_content = get $spms_session.$session_code or die "Unable to get $spms_session for $session_code\n";
+	my $xpsession = XML::XPath->new( xml => $session_content );
+
+	# Example structure:
+	#<program_codes>
+	#	<program_code>
+	#		<code primary="Y">THPP022</code>
+	#	</program_code>
+	#	<program_code>
+	#		<code primary="N">THPOL05</code>
+	#	</program_code>
+	#</program_codes>
+	
+	# Find all <program_codes> and loop through them
+	my $program_codes_nodeset = $xpsession->find('//program_codes'); 
+	foreach my $program_codes_node ($program_codes_nodeset->get_nodelist) {
+		# Create empty arrays for primary and secondary paper codes
+		my @primary;
+		my @secondary;
+		# Loop through the <program_code> elements
+		foreach my $program_code_node ($program_codes_node->getChildNodes() ) {
+			# Find all 'Element' child nodes, for the ones that are named 'code' we 
+			# get the inner text node and the 'primary' attribute value.
+			foreach my $node ($program_code_node->getChildNodes() ) {
+				if (ref($node) eq 'XML::XPath::Node::Element') {
+					if ($node->getLocalName() eq "code") {
+						# Fetch text node inside and extract the program code in text
+						my $program_code = $node->getChildNode(1)->getValue();
+						# Fetch attribute value of 'primary' attribute
+						my $primary_attr = $node->getAttribute("primary");
+						if ($primary_attr eq "Y") {
+							# we add the paper_code to the primary array
+							push (@primary, $program_code);
+						} else {
+							# we add the paper_code to the secondary array
+							push (@secondary, $program_code);
+						}
+					}
+				}
+			}
+		}
+		# We check if we have more than one primary code (should never happen)
+		if (@primary > 0) {
+			if (@primary != 1) {
+				print STDERR "Warning! More than one primary paper code: " . join(", ", @primary ) . "\n";
+			}
+			my $root = "../papers";
+			my $target = $root . '/' . $primary[0] . '/' . $primary[0] . ".PDF";
+			if (-e $target) {
+				# We link with the primary paper code
+				my $command = "ln -s $target " . $primary[0] . ".PDF";
+				if ($platform eq "win") {
+					$command = "symlink make -to $target -name " . $primary[0] . ".PDF";
+				}
+				print STDOUT $command . "\n";
+				system($command);
+				# We check if we have to link secondary codes
+				if (@secondary > 0) {
+					foreach (@secondary) {
+						my $linkname = $_ . ".PDF";
+						$command = "ln -s $target $linkname";
+						if ($platform eq "win") {
+							$command = "symlink make -to $target -name $linkname";
+						}
+						print STDOUT $command . "\n";
+						system($command);
+					}
+				}
+			}
+		}
+	}
+	print STDERR "Done processing session $session_code\n";
+}
+
