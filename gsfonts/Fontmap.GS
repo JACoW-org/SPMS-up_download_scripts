@@ -43,5 +43,8 @@
 (Times New Roman,Italic)		/Times-Italic			;
 (Times New Roman,BoldItalic)		/Times-BoldItalic		;
 
-
+/TimesNewRomanPSMT                      /Times-Roman                    ;
+/TimesNewRomanPS-BoldMT                 /Times-Bold                     ;
+/TimesNewRomanPS-ItalicMT               /Times-Italic                   ;
+/TimesNewRomanPS-BoldItalicMT           /Times-BoldItalic               ;
 
