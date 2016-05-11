@@ -6,8 +6,8 @@
 ## it should be $ORACLE_HOME/Apache/perl/bin/perl         ##
 ############################################################
 
-#	editor.zipdownload          $Version 1.15 2012.08.28$
-#	Copyright (C) 2004-2014 Elettra - Sincrotrone Trieste S.C.p.A.
+#	editor.zipdownload          $Version 1.16 2016.05.11$
+#	Copyright (C) 2004-2014 Elettra - Elettra Sincrotrone Trieste
 #	<http://www.elettra.eu> by Ivan Andrian
 #
 #	Manage file uploads for the JACoW SPMS
@@ -144,7 +144,7 @@ if ($wanted_file) {	# direct download of the file
 
 	print $q->header( -type=>'application/octet-stream'
 					, -expires=>'now'
-					, -Content_Disposition=>"attachment; filename=$wanted_file"
+					, -Content_Disposition=>"attachment; filename=\"$wanted_file\""
 					);
 	# now read the file
 	my $full_path_with_file = File::Spec->catfile($full_path, $wanted_file);
@@ -204,7 +204,7 @@ if ($wanted_file) {	# direct download of the file
 		# and now let's give the user the file!
 		print $q->header( -type=>'application/octet-stream'
 					, -expires=>'now'
-					, -Content_Disposition=>"attachment; filename=$paper_id.zip"
+					, -Content_Disposition=>"attachment; filename=\"$paper_id.zip\""
 					);
 		# now read the file
 		my $buffer;
